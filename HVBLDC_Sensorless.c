@@ -112,19 +112,19 @@ Uint32 CmtnPeriodSetpt = 0x00000400;//0x000000400
 Uint32 RampDelay = 10;
 #endif
 
-_iq SpeedRef1=_IQ(0.3);
-_iq SpeedRef2=_IQ(0.3);
+_iq SpeedRef1=_IQ(0.4);
+_iq SpeedRef2=_IQ(0.4);
 
-int16 DlogCh1 = 0;
-int16 DlogCh2 = 0;
-int16 DlogCh3 = 0;
-int16 DlogCh4 = 0;
+//int16 DlogCh1 = 0;
+//int16 DlogCh2 = 0;
+//int16 DlogCh3 = 0;
+//int16 DlogCh4 = 0;
 
 
 // Used for ADC Configuration
 int 	ChSel[16]   = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 int		TrigSel[16] = {5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5};//must be tuned**
-int     ACQPS[16]   = {8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8};
+int     ACQPS[16]   = {6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6};
 
 /*------variable for enable the program 20160321-------*/
 //volatile Uint16 EnableSwitch = FALSE;//FALSE, This will read Gpio value later
@@ -153,26 +153,25 @@ RMP3 rmp3_2 = RMP3_DEFAULTS;
 
 // Instance a MOD6 Module
 MOD6CNT mod1 = MOD6CNT_DEFAULTS;
-//MOD6CNT mod2 = MOD6CNT_DEFAULTS;
 
 // Instance a MOD6INV Module
-//MOD6CNTINV modinv1 = MOD6CNTINV_DEFAULTS;
-MOD6CNT modinv1=MOD6CNT_DEFAULTS;
+MOD6CNTINV modinv1=MOD6CNTINV_DEFAULTS;
+
 // Instance a IMPULSE Module
 IMPULSE impl1 = IMPULSE_DEFAULTS;
 IMPULSE impl2 = IMPULSE_DEFAULTS;
 
 // Instance a COMTRIG Module
 CMTN cmtn1 = CMTN_DEFAULTS;
-//CMTN cmtn2 = CMTN_DEFAULTS;
+
 CMTN_INV cmtninv1 = CMTN_INV_DEFAULTS;
-//CMTN cmtninv1 = CMTN_DEFAULTS;
+
 // Instance a SPEED_PR Module
 SPEED_MEAS_CAP speed1 = SPEED_MEAS_CAP_DEFAULTS;
 SPEED_MEAS_CAP speed2 = SPEED_MEAS_CAP_DEFAULTS;
 
 // Create an instance of DATALOG Module
-DLOG_4CH dlog = DLOG_4CH_DEFAULTS;
+//DLOG_4CH dlog = DLOG_4CH_DEFAULTS;
 
 void main(void)
           {
@@ -260,14 +259,14 @@ void main(void)
 
 // Initialize DATALOG module
 
-    dlog.iptr1 = &DlogCh1;
-    dlog.iptr2 = &DlogCh2;
-    dlog.iptr3 = &DlogCh3;
-    dlog.iptr4 = &DlogCh4;
-    dlog.trig_value = 0x1;
-    dlog.size = 0x0C8;
-    dlog.prescalar = 25;
-    dlog.init(&dlog);
+//    dlog.iptr1 = &DlogCh1;
+//    dlog.iptr2 = &DlogCh2;
+//    dlog.iptr3 = &DlogCh3;
+//    dlog.iptr4 = &DlogCh4;
+//    dlog.trig_value = 0x1;
+//    dlog.size = 0x0C8;
+//    dlog.prescalar = 25;
+//    dlog.init(&dlog);
 
 // Initialize ADC module
 
@@ -520,14 +519,23 @@ interrupt void MainISR(void)
 		rc1.Tmp=0;
 		rc1.SetpointValue=0;
 		rc1.TargetValue=0;
-
 		impl1.Counter=1000;
 
+		rc2.RampDelayCount=0;
+		rc2.EqualFlag=0;
+		rc2.Tmp=0;
+		rc2.SetpointValue=0;
+		rc2.TargetValue=0;
+		impl2.Counter=1000;
 
 		// Initialize RMP2 module
 		rmp2_1.Out = (int32)ALIGN_DUTY;
 		rmp2_1.Ramp2Delay =0x00000050;
 		rmp2_1.Ramp2DelayCount=0;
+
+		rmp2_2.Out = (int32)ALIGN_DUTY;
+		rmp2_2.Ramp2Delay =0x00000050;
+		rmp2_2.Ramp2DelayCount=0;
 
 		// Initialize RMP3 module
 		rmp3_1.DesiredInput = CmtnPeriodTarget;
@@ -536,15 +544,32 @@ interrupt void MainISR(void)
 		rmp3_1.Ramp3DelayCount=0;
 		rmp3_1.Ramp3DoneFlag=0;
 
+		rmp3_2.DesiredInput = CmtnPeriodTarget;
+		rmp3_2.Ramp3Delay = RampDelay;
+		rmp3_2.Out = CmtnPeriodSetpt;
+		rmp3_2.Ramp3DelayCount=0;
+		rmp3_2.Ramp3DoneFlag=0;
+
 		mod1.Counter=0;
 		mod1.Direction=0;
 		mod1.TrigInput=1;
+
+		modinv1.Counter=0;
+		modinv1.Direction=0;
+		modinv1.TrigInput=1;
 
 		pid1_spd.Out=0;
 		pid1_spd.v1=0;
 		pid1_spd.ui=0;
 		pid1_spd.i1=0;
 		pid1_spd.up=0;
+
+		pid2_spd.Out=0;
+		pid2_spd.v1=0;
+		pid2_spd.ui=0;
+		pid2_spd.i1=0;
+		pid2_spd.up=0;
+
 		GpioDataRegs.GPADAT.bit.GPIO21=0;//on the little driver
 		BLDC_decelDoneFlag=0;
 	}
@@ -565,6 +590,7 @@ interrupt void MainISR(void)
     if (AlignFlag != 0)
     {
     	rmp3_1.Ramp3DoneFlag=0;
+    	rmp3_2.Ramp3DoneFlag=0;
     	CmtnPeriodSetpt = 0x00000400;
 
 		SpeedRef1=_IQ(0.3);
@@ -581,7 +607,7 @@ interrupt void MainISR(void)
       BLDCPWM_MACRO(1,2,3,pwm1)
       BLDCPWM_MACRO(4,5,6,pwm2)
 
-      if (VirtualTimer > 0x5997)//0x7FFE
+      if (VirtualTimer > 0x7FFE)//0x5997)//0x7FFE
       {
     	  if (LoopCount != LOOP_CNT_MAX)
            LoopCount++;
@@ -1084,7 +1110,7 @@ interrupt void MainISR(void)
 				modinv1.TrigInput = cmtninv1.CmtnTrig;   // closed-loop operation
 
 		  MOD6CNT_MACRO(mod1)
-		  MOD6CNT_MACRO(modinv1)
+		  MOD6CNTINV_MACRO(modinv1)
 
 // ------------------------------------------------------------------------------
 //    Connect inputs of the PID_REG3 module and call the PID speed controller macro.
@@ -1109,7 +1135,7 @@ interrupt void MainISR(void)
       if (rc2.EqualFlag == 0x7FFFFFFF)
       {
          SpeedLoopFlag2 = TRUE;
-         rc2.RampDelayMax = 20;//30
+         rc2.RampDelayMax = 30;//30
       }
 
 // ------------------------------------------------------------------------------
@@ -1241,9 +1267,11 @@ interrupt void DebounceISR(void)
 			 else
 					 CtrlSwitchRemainTime=0;//ms
 			}
-		else//this mean RotDireChangFlag=1, and the motor rotata direction needed to be reversed,
-		{
 
+		else
+		{
+			/*this mean RotDireChangFlag=1, and the motor rotata direction needed to be reversed,
+			however, before reverse, the motor should decellarate*/
 			BLDC_decelerateTicker++;
 			if(BLDC_decelerateTicker>1000)//the SpeedRef will decendance every 1 sec
 			{
@@ -1265,7 +1293,7 @@ interrupt void DebounceISR(void)
 				}
 			}
 
-		}
+		}//end of decelerate
 
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP3;
 }//end of debounceISR
